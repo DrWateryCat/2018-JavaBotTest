@@ -11,8 +11,8 @@ public class ForwardFiveSeconds implements AutonomousMode {
             currentTime = Timer.getFPGATimestamp();
         }
         Drive.getInstance().drive(1, 1);
-        if (currentTime >= currentTime + 5000) {
-            Drive.getInstance().drive(0, 0);
+        if (currentTime <= currentTime + 5000) {
+            Drive.getInstance().stop();
         }
 
         runOnce = true;
