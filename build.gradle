@@ -1,9 +1,21 @@
+buildscript {
+    ext.kotlin_version = '1.2.0'
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+    }
+}
+
 plugins {
     id "java"
     id "eclipse"
     id "idea"
     id "jaci.openrio.gradle.GradleRIO" version "2017.11.27"
 }
+
+apply plugin: "kotlin"
 
 def TEAM = 2186
 def ROBOT_CLASS = "frc.team2186.robot.Robot"
@@ -34,7 +46,7 @@ dependencies {
     compile ctre()
     compile navx()
     compile 'com.google.code.gson:gson:2.8.2'
-    compile 'io.netty:netty-all:4.0.24.Final'
+    compile "org.jetbrains.kotlin:kotlin-stdlib-jre8:$kotlin_version"
 }
 
 // Setting up my Jar File. In this case, adding all libraries into the main jar ('fat jar')
@@ -47,4 +59,24 @@ jar {
 
 task wrapper(type: Wrapper) {
     gradleVersion = '4.2.1'
+}
+
+compileKotlin {
+    kotlinOptions {
+        jvmTarget = "1.8"
+    }
+}
+
+compileTestKotlin {
+    kotlinOptions {
+        jvmTarget = "1.8"
+    }
+}
+
+
+
+kotlin {
+    experimental {
+        coroutines "enable"
+    }
 }
