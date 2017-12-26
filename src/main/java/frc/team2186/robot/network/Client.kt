@@ -9,6 +9,7 @@ import frc.team2186.robot.Robot
 import java.io.BufferedReader
 import java.io.DataOutputStream
 import java.io.InputStreamReader
+import java.io.PrintWriter
 import java.net.Socket
 
 object Client {
@@ -27,7 +28,7 @@ object Client {
     private fun update() {
         while (true) {
             val jetson = Socket(Config.Jetson.IP, Config.Jetson.PORT)
-            val output = DataOutputStream(jetson.getOutputStream())
+            val output = PrintWriter(DataOutputStream(jetson.getOutputStream()))
             val input = BufferedReader(InputStreamReader(jetson.getInputStream()))
 
             while (jetson.isConnected) {
@@ -42,7 +43,7 @@ object Client {
                     toJetson.addProperty("current_time", Timer.getFPGATimestamp())
                 }
 
-                output.writeBytes(toJetson.asString + '\n')
+                output.println(toJetson.toString())
 
                 val fromJetson = JsonParser().parse(input.readLine())
 

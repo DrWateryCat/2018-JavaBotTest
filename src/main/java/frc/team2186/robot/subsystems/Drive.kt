@@ -2,9 +2,14 @@ package frc.team2186.robot.subsystems
 
 import com.ctre.CANTalon
 import com.kauailabs.navx.frc.AHRS
+import edu.wpi.first.wpilibj.PIDController
+import edu.wpi.first.wpilibj.PIDOutput
+import edu.wpi.first.wpilibj.PIDSource
 import edu.wpi.first.wpilibj.SPI
 import frc.team2186.robot.Config
 import frc.team2186.robot.Robot
+import frc.team2186.robot.lib.common.SynchronousPID
+import frc.team2186.robot.lib.math.Rotation2D
 import frc.team2186.robot.network.Client
 import frc.team2186.robot.plus
 
@@ -36,10 +41,18 @@ object Drive {
     val leftVelocity: Double get() = nativeToInchesPerSecond(-leftSide.encVelocity as Double)
     val rightVelocity: Double get() = nativeToInchesPerSecond(rightSide.encVelocity as Double)
 
+    private var leftVel: Double = 0.0
+    private var rightVel: Double = 0.0
+
     var leftThrottle: Double = 0.0
     var rightThrottle: Double = 0.0
 
     val gyro: AHRS = AHRS(SPI.Port.kMXP)
+
+    private val velocityHeadingPID = SynchronousPID(1.0, 0.0, 0.0)
+
+    private var currentError = 0.0
+    private var deltaSpeed = 0.0
 
     private fun inchesPerSecondToRPM(ips: Double): Double = ips * 60 / (WHEEL_DIAMETER * Math.PI)
     private fun rpmToNativeUnits(rpm: Double): Double = rpm / TICKS_PER_REV / (1 / 60 / 100)
@@ -50,6 +63,8 @@ object Drive {
     private fun nativeToInchesPerSecond(native: Double) = rpmToInchesPerSecond(nativeToRPM(native))
 
     init {
+        velocityHeadingPID.setOutputRange(-30.0, 30.0)
+
         Thread {
             update()
         }.start()
@@ -65,8 +80,8 @@ object Drive {
                 }
                 Robot.currentMode == 1 -> {
                     //Auto
-                    leftSide.set(inchesPerSecondToNativeUnits(Client.requestedLeftVelocity))
-                    rightSide.set(inchesPerSecondToNativeUnits(Client.requestedRightVelocity))
+                    leftSide.set(inchesPerSecondToNativeUnits(leftVel))
+                    rightSide.set(inchesPerSecondToNativeUnits(rightVel))
                 }
                 Robot.currentMode == 2 -> {
                     //Teleop
@@ -81,6 +96,17 @@ object Drive {
         }
     }
 
+    fun currentHeading(): Rotation2D = Rotation2D.fromDegrees(this.gyro.yaw as Double)
+
+    fun calculateVelocityHeading() {
+        val actualGyro = currentHeading()
+        val lastHeadingError = Rotation2D.fromDegrees(Client.requestedGyroAngle).rotateBy(actualGyro.inverse()).degrees
+
+        val deltaV = velocityHeadingPID.calculate(lastHeadingError)
+        leftVel = Client.requestedLeftVelocity + deltaV / 2
+        rightVel = Client.requestedRightVelocity - deltaV / 2
+    }
+
     fun onDisabled() {
         leftSide.changeControlMode(CANTalon.TalonControlMode.PercentVbus)
         rightSide.changeControlMode(CANTalon.TalonControlMode.PercentVbus)
@@ -93,5 +119,19 @@ object Drive {
 
     fun onEnterTeleop() {
         onDisabled()
+    }
+
+    fun stop() {
+        when {
+            Robot.currentMode == 0 || Robot.currentMode == 2 -> {
+                this.leftThrottle = 0.0
+                this.rightThrottle = 0.0
+            }
+
+            Robot.currentMode == 1 -> {
+                this.leftVel = 0.0
+                this.rightVel = 0.0
+            }
+        }
     }
 }
