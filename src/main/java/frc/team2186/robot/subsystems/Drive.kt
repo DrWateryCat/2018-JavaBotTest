@@ -24,6 +24,10 @@ object Drive {
         reverseSensor(true)
         changeControlMode(CANTalon.TalonControlMode.PercentVbus)
         enableBrakeMode(true)
+        p = Config.PID.LeftDrive.P
+        i = Config.PID.LeftDrive.I
+        d = Config.PID.LeftDrive.D
+        f = Config.PID.LeftDrive.F
     } + CANTalon(Config.Drive.LEFT_SLAVE).apply {
         enableBrakeMode(true)
     }
@@ -34,6 +38,10 @@ object Drive {
         reverseOutput(true)
         inverted = true
         changeControlMode(CANTalon.TalonControlMode.PercentVbus)
+        p = Config.PID.RightDrive.P
+        i = Config.PID.RightDrive.I
+        d = Config.PID.RightDrive.D
+        f = Config.PID.RightDrive.F
     } + CANTalon(Config.Drive.RIGHT_SLAVE).apply {
         enableBrakeMode(true)
     }
@@ -43,9 +51,11 @@ object Drive {
 
     private var leftVel: Double = 0.0
     private var rightVel: Double = 0.0
+    private var gyroA = 0.0
 
     var leftThrottle: Double = 0.0
     var rightThrottle: Double = 0.0
+    var gyroAngle: Double = 0.0
 
     val gyro: AHRS = AHRS(SPI.Port.kMXP)
 
@@ -54,12 +64,12 @@ object Drive {
     private var currentError = 0.0
     private var deltaSpeed = 0.0
 
-    private fun inchesPerSecondToRPM(ips: Double): Double = ips * 60 / (WHEEL_DIAMETER * Math.PI)
+    fun inchesPerSecondToRPM(ips: Double): Double = ips * 60 / (WHEEL_DIAMETER * Math.PI)
     private fun rpmToNativeUnits(rpm: Double): Double = rpm / TICKS_PER_REV / (1 / 60 / 100)
     private fun inchesPerSecondToNativeUnits(ips: Double) = rpmToNativeUnits(inchesPerSecondToRPM(ips))
 
     private fun nativeToRPM(native: Double): Double = native * TICKS_PER_REV * (1 / 60 / 100)
-    private fun rpmToInchesPerSecond(rpm: Double) = rpm * (WHEEL_DIAMETER * Math.PI) / 60
+    fun rpmToInchesPerSecond(rpm: Double) = rpm * (WHEEL_DIAMETER * Math.PI) / 60
     private fun nativeToInchesPerSecond(native: Double) = rpmToInchesPerSecond(nativeToRPM(native))
 
     init {
@@ -80,6 +90,18 @@ object Drive {
                 }
                 Robot.currentMode == 1 -> {
                     //Auto
+                    if (Config.Jetson.ENABLED.not()) {
+                        leftVel = leftThrottle
+                        rightVel = rightThrottle
+                        gyroA = gyroAngle
+                    } else {
+                        leftVel = Client.requestedLeftVelocity
+                        rightVel = Client.requestedRightVelocity
+                        gyroA = Client.requestedGyroAngle
+                    }
+
+                    calculateVelocityHeading()
+
                     leftSide.set(inchesPerSecondToNativeUnits(leftVel))
                     rightSide.set(inchesPerSecondToNativeUnits(rightVel))
                 }
@@ -100,11 +122,11 @@ object Drive {
 
     fun calculateVelocityHeading() {
         val actualGyro = currentHeading()
-        val lastHeadingError = Rotation2D.fromDegrees(Client.requestedGyroAngle).rotateBy(actualGyro.inverse()).degrees
+        val lastHeadingError = Rotation2D.fromDegrees(gyroA).rotateBy(actualGyro.inverse()).degrees
 
         val deltaV = velocityHeadingPID.calculate(lastHeadingError)
-        leftVel = Client.requestedLeftVelocity + deltaV / 2
-        rightVel = Client.requestedRightVelocity - deltaV / 2
+        leftVel += deltaV / 2
+        rightVel -= deltaV / 2
     }
 
     fun onDisabled() {
